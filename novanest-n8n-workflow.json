@@ -1,0 +1,167 @@
+{
+  "name": "NovaNest Realty — Lead Generation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "novanest-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook — Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "novanest-lead"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\n\n// Normalize and enrich the lead data\nconst lead = {\n  firstName:   body.firstName || '',\n  lastName:    body.lastName  || '',\n  fullName:    `${body.firstName} ${body.lastName}`,\n  email:       body.email,\n  phone:       body.phone,\n  intent:      body.intent,\n  budget:      body.budget,\n  location:    body.location,\n  source:      body.source || 'landing-page',\n  timestamp:   body.timestamp || new Date().toISOString(),\n  leadScore:   calculateScore(body),\n  dateFormatted: new Date().toLocaleDateString('en-NG', { weekday:'long', year:'numeric', month:'long', day:'numeric' })\n};\n\nfunction calculateScore(b) {\n  let score = 50;\n  if (b.budget === '500m+')       score += 30;\n  if (b.budget === '250m-500m')   score += 20;\n  if (b.budget === '100m-250m')   score += 10;\n  if (b.intent === 'buy')         score += 15;\n  if (b.intent === 'invest')      score += 10;\n  if (b.location === 'maitama')   score += 5;\n  if (b.location === 'asokoro')   score += 5;\n  return Math.min(score, 100);\n}\n\nreturn [{ json: lead }];"
+      },
+      "id": "2",
+      "name": "Process & Score Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.leadScore }}",
+              "rightValue": 75,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3",
+      "name": "Hot Lead? (Score ≥ 75)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "agent@novanest.ng",
+        "subject": "🔥 HOT LEAD [Score: {{ $json.leadScore }}] — {{ $json.fullName }}",
+        "emailType": "html",
+        "message": "<div style='font-family:sans-serif;max-width:600px;margin:0 auto'>\n  <div style='background:#C9A84C;padding:24px 32px'>\n    <h2 style='color:#0D0D0D;margin:0;font-size:22px'>🔥 Hot Lead Alert — NovaNest Realty</h2>\n  </div>\n  <div style='background:#1a1a1a;color:#e8e2d9;padding:32px'>\n    <p style='color:#C9A84C;font-size:12px;letter-spacing:0.1em;text-transform:uppercase'>Lead Score: {{ $json.leadScore }}/100</p>\n    <h3 style='font-size:24px;margin:8px 0 24px'>{{ $json.fullName }}</h3>\n    <table style='width:100%;border-collapse:collapse'>\n      <tr><td style='padding:10px 0;border-bottom:1px solid #333;color:#888;width:40%'>Email</td><td style='padding:10px 0;border-bottom:1px solid #333'>{{ $json.email }}</td></tr>\n      <tr><td style='padding:10px 0;border-bottom:1px solid #333;color:#888'>Phone</td><td style='padding:10px 0;border-bottom:1px solid #333'>{{ $json.phone }}</td></tr>\n      <tr><td style='padding:10px 0;border-bottom:1px solid #333;color:#888'>Intent</td><td style='padding:10px 0;border-bottom:1px solid #333;text-transform:capitalize'>{{ $json.intent }}</td></tr>\n      <tr><td style='padding:10px 0;border-bottom:1px solid #333;color:#888'>Budget</td><td style='padding:10px 0;border-bottom:1px solid #333'>₦{{ $json.budget }}</td></tr>\n      <tr><td style='padding:10px 0;color:#888'>Preferred Location</td><td style='padding:10px 0;text-transform:capitalize'>{{ $json.location }}, Abuja</td></tr>\n    </table>\n    <div style='margin-top:32px;background:#C9A84C;display:inline-block'>\n      <a href='mailto:{{ $json.email }}' style='display:inline-block;padding:14px 28px;color:#0D0D0D;text-decoration:none;font-weight:600;font-size:13px;letter-spacing:0.08em'>CONTACT THIS LEAD →</a>\n    </div>\n    <p style='color:#555;font-size:12px;margin-top:20px'>Received: {{ $json.dateFormatted }}</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "4",
+      "name": "Email Agent — Hot Lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "sendTo": "agent@novanest.ng",
+        "subject": "New Lead — {{ $json.fullName }} (Score: {{ $json.leadScore }})",
+        "emailType": "html",
+        "message": "<div style='font-family:sans-serif;max-width:600px;margin:0 auto'>\n  <div style='background:#1F1F1F;border-top:3px solid #C9A84C;padding:24px 32px'>\n    <h2 style='color:#C9A84C;margin:0;font-size:18px'>New Lead — NovaNest Realty</h2>\n  </div>\n  <div style='background:#1a1a1a;color:#e8e2d9;padding:32px'>\n    <h3>{{ $json.fullName }}</h3>\n    <p>Email: {{ $json.email }}<br/>Phone: {{ $json.phone }}<br/>Intent: {{ $json.intent }}<br/>Budget: {{ $json.budget }}<br/>Location: {{ $json.location }}</p>\n    <p style='color:#555;font-size:12px'>Received: {{ $json.dateFormatted }}</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "5",
+      "name": "Email Agent — Regular Lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Welcome to NovaNest Realty, {{ $json.firstName }} ✦",
+        "emailType": "html",
+        "message": "<div style='font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#0D0D0D;color:#E8E2D9'>\n  <div style='background:linear-gradient(135deg,#0D0D0D,#1a1508);border-bottom:1px solid #C9A84C;padding:40px 40px 32px;text-align:center'>\n    <p style='color:#C9A84C;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;margin:0 0 12px'>NovaNest Realty</p>\n    <h1 style='font-size:32px;font-weight:300;margin:0;color:#FAF8F5'>Thank You, {{ $json.firstName }}.</h1>\n  </div>\n  <div style='padding:40px'>\n    <p style='font-size:16px;line-height:1.8;color:#c0b8ae'>We've received your enquiry and a dedicated NovaNest consultant will reach out to you at <strong style='color:#C9A84C'>{{ $json.email }}</strong> or <strong style='color:#C9A84C'>{{ $json.phone }}</strong> within <strong>2 business hours</strong> with properties tailored to your brief.</p>\n    <div style='border:1px solid #2a2a2a;border-radius:2px;padding:24px;margin:32px 0'>\n      <p style='color:#C9A84C;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;margin:0 0 16px'>Your Brief Summary</p>\n      <table style='width:100%;border-collapse:collapse;font-size:14px'>\n        <tr><td style='padding:8px 0;border-bottom:1px solid #222;color:#777;width:40%'>Intent</td><td style='padding:8px 0;border-bottom:1px solid #222;text-transform:capitalize'>{{ $json.intent }}</td></tr>\n        <tr><td style='padding:8px 0;border-bottom:1px solid #222;color:#777'>Budget</td><td style='padding:8px 0;border-bottom:1px solid #222'>₦{{ $json.budget }}</td></tr>\n        <tr><td style='padding:8px 0;color:#777'>Location</td><td style='padding:8px 0;text-transform:capitalize'>{{ $json.location }}, Abuja</td></tr>\n      </table>\n    </div>\n    <p style='font-size:13px;color:#555;line-height:1.8'>In the meantime, explore our portfolio at <a href='https://novanest.ng' style='color:#C9A84C;text-decoration:none'>novanest.ng</a> or reach us directly at <a href='tel:+2349120000000' style='color:#C9A84C;text-decoration:none'>+234 912 000 0000</a>.</p>\n  </div>\n  <div style='background:#111;border-top:1px solid #1a1a1a;padding:20px 40px;text-align:center'>\n    <p style='font-size:11px;color:#444;margin:0'>© 2026 NovaNest Realty Ltd · Abuja, Nigeria</p>\n  </div>\n</div>",
+        "options": {}
+      },
+      "id": "6",
+      "name": "Email Lead — Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Leads", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date":      "={{ $json.dateFormatted }}",
+            "Full Name": "={{ $json.fullName }}",
+            "Email":     "={{ $json.email }}",
+            "Phone":     "={{ $json.phone }}",
+            "Intent":    "={{ $json.intent }}",
+            "Budget":    "={{ $json.budget }}",
+            "Location":  "={{ $json.location }}",
+            "Score":     "={{ $json.leadScore }}",
+            "Source":    "={{ $json.source }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "7",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"message\": \"Lead received\" }",
+        "options": {}
+      },
+      "id": "8",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "Webhook — Receive Lead": {
+      "main": [[{ "node": "Process & Score Lead", "type": "main", "index": 0 }]]
+    },
+    "Process & Score Lead": {
+      "main": [[{ "node": "Hot Lead? (Score ≥ 75)", "type": "main", "index": 0 }]]
+    },
+    "Hot Lead? (Score ≥ 75)": {
+      "main": [
+        [{ "node": "Email Agent — Hot Lead",     "type": "main", "index": 0 }],
+        [{ "node": "Email Agent — Regular Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "Email Agent — Hot Lead": {
+      "main": [[{ "node": "Email Lead — Confirmation", "type": "main", "index": 0 }]]
+    },
+    "Email Agent — Regular Lead": {
+      "main": [[{ "node": "Email Lead — Confirmation", "type": "main", "index": 0 }]]
+    },
+    "Email Lead — Confirmation": {
+      "main": [[{ "node": "Save to Google Sheets", "type": "main", "index": 0 }]]
+    },
+    "Save to Google Sheets": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["lead-gen", "real-estate", "novanest"],
+  "meta": { "templateCredsSetupCompleted": false }
+}
